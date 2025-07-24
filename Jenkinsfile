@@ -1,10 +1,6 @@
 pipeline {
     agent any
 
-    tools {
-        sonarqubeScanner 'Sonar Scanner 7.2.0.5079'
-    }
-
     environment {
         REGISTRY = 'image-registry.openshift-image-registry.svc:5000'
         NAMESPACE = 'one-gate-payment'
