@@ -18,9 +18,11 @@ pipeline {
     stages {
         stage('SAST Analysis') {
             steps {
-                withCredentials([string(credentialsId: 'sonarqube-transaction-consumer-token', variable: 'SONAR_TOKEN')]) {
+                withSonarqubeEnv('SonarQube') {
                     script {
                         echo "Running SAST analysis with SonarQube..."
+                        def scannerHome = tool name: 'SonarQube Scanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
+
 
                         sh """
                             sonar-scanner \\
