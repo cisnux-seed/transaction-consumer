@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     tools {
-        sonar-scanner 'Sonar Scanner 7.2.0.5079'
+        sonarqubeScanner 'Sonar Scanner 7.2.0.5079'
     }
 
     environment {
