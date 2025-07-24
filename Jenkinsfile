@@ -18,7 +18,7 @@ pipeline {
     stages {
         stage('SAST Analysis') {
             steps {
-                withSonarqubeEnv('SonarQube') {
+                withSonarQubeEnv('SonarQube') {
                     script {
                         echo "Running SAST analysis with SonarQube..."
                         def scannerHome = tool name: 'SonarQube Scanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
