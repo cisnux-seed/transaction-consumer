@@ -28,10 +28,7 @@ pipeline {
                                 -Dsonar.projectName='transaction-consumer' \\
                                 -Dsonar.sources=. \\
                                 -Dsonar.host.url=\${SONARQUBE_URL} \\
-                                -Dsonar.token=\${SONAR_TOKEN} \\
-                                --no-daemon \\
-                                --console=plain \\
-                                --quiet
+                                -Dsonar.token=\${SONAR_TOKEN}
 
                             echo "✅ SAST analysis completed"
                         """
