@@ -23,7 +23,7 @@ pipeline {
                             echo "Using scanner at: ${scannerHome}"
                             ls -la ${scannerHome}/bin/
 
-                            sonar-scanner \\
+                            ${scannerHome}/bin/sonar-scanner \\
                                 -Dsonar.projectKey=transaction-consumer \\
                                 -Dsonar.projectName='transaction-consumer' \\
                                 -Dsonar.sources=. \\
