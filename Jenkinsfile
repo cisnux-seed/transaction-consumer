@@ -19,8 +19,10 @@ pipeline {
                         echo "Running SAST analysis with SonarQube..."
                         def scannerHome = tool name: 'SonarQube Scanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
 
-
                         sh """
+                            echo "Using scanner at: ${scannerHome}"
+                            ls -la ${scannerHome}/bin/
+
                             sonar-scanner \\
                                 -Dsonar.projectKey=transaction-consumer \\
                                 -Dsonar.projectName='transaction-consumer' \\
