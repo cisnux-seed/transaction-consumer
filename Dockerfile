@@ -27,14 +27,8 @@ WORKDIR /root/
 # Copy the binary from builder stage
 COPY --from=builder /app/transaction-consumer .
 
-# Set timezone
-ENV TZ=Asia/Jakarta
-
-# Create non-root user
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -u 1001 -S appuser -G appgroup
-
-USER appuser
+RUN chgrp -R 0 /app && \
+    chmod -R g=u /app
 
 # Run the application
 CMD ["./transaction-consumer"]
