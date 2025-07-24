@@ -26,9 +26,7 @@ pipeline {
                             ${scannerHome}/bin/sonar-scanner \\
                                 -Dsonar.projectKey=transaction-consumer \\
                                 -Dsonar.projectName='transaction-consumer' \\
-                                -Dsonar.sources=. \\
-                                -Dsonar.host.url=\${SONARQUBE_URL} \\
-                                -Dsonar.token=\${SONAR_TOKEN}
+                                -Dsonar.sources=.
 
                             echo "✅ SAST analysis completed"
                         """
