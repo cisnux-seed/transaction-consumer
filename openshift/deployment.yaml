@@ -48,7 +48,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: transaction-consumer-secrets
-                  key: db-password
+                  key: db-name
             - name: DB_SSLMODE
               value: "disable"
             - name: DB_MAX_IDLE_CONNS
