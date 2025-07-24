@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-consumer
+  namespace: one-gate-payment
+  labels:
+    app: transaction-consumer
+    version: "1.0.0"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: transaction-consumer
+  template:
+    metadata:
+      labels:
+        app: transaction-consumer
+        version: "1.0.0"
+    spec:
+      containers:
+        - name: transaction-consumer
+          image: image-registry.openshift-image-registry.svc:5000/one-gate-payment/transaction-consumer:latest
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-consumer-secrets
+                  key: db-host
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-consumer-secrets
+                  key: db-port
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-consumer-secrets
+                  key: db-username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-consumer-secrets
+                  key: db-password
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-consumer-secrets
+                  key: db-password
+            - name: DB_SSLMODE
+              value: "require"
+            - name: DB_MAX_IDLE_CONNS
+              value: "10"
+            - name: DB_MAX_OPEN_CONNS
+              value: "100"
+            - name: DB_CONN_MAX_LIFETIME
+              value: "1h"
+            - name: KAFKA_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-consumer-secrets
+                  key: brokers
+            - name: KAFKA_TOPIC
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-consumer-secrets
+                  key: topic
+            - name: KAFKA_GROUP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-consumer-secrets
+                  key: group-id
+            - name: KAFKA_COMMIT_INTERVAL
+              value: "2s"
+            - name: KAFKA_MAX_BYTES
+              value: "10485760"
+            - name: APP_LOG_LEVEL
+              value: "info"
+            - name: APP_ENVIRONMENT
+              value: "production"
+            - name: PORT
+              value: "8080"
+            - name: DEBUG
+              value: "false"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "pgrep transaction-consumer"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "pgrep transaction-consumer"
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          imagePullPolicy: Always
