@@ -55,11 +55,6 @@ func NewConnection(cfg config.DatabaseConfig, appConfig config.AppConfig) (*gorm
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Auto migrate
-	if err := db.AutoMigrate(&TransactionModel{}); err != nil {
-		return nil, fmt.Errorf("failed to migrate database: %w", err)
-	}
-
 	return db, nil
 }
 
