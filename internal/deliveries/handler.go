@@ -32,7 +32,7 @@ type KafkaTransactionMessage struct {
 	TransactionID            string        `json:"transactionId"`
 	TransactionType          string        `json:"transactionType"`
 	TransactionStatus        string        `json:"transactionStatus"`
-	Amount                   int64         `json:"amount"` // Amount in cents
+	Amount                   float64       `json:"amount"` // Amount in cents
 	BalanceBefore            float64       `json:"balanceBefore"`
 	BalanceAfter             float64       `json:"balanceAfter"`
 	Currency                 string        `json:"currency"`
