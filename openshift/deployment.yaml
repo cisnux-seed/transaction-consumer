@@ -87,10 +87,8 @@ spec:
           resources:
             requests:
               memory: "256Mi"
-              cpu: "700m"
             limits:
               memory: "512Mi"
-              cpu: "1"
           livenessProbe:
             exec:
               command:
