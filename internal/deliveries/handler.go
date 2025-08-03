@@ -55,8 +55,7 @@ func (h *TransactionHandler) HandleMessage(ctx context.Context, message []byte) 
 		return fmt.Errorf("failed to unmarshal message: %w", err)
 	}
 
-	log := logger.NewLogger()
-	log.Info("Processing transaction message", kafkaMsg)
+	h.logger.Debug("Unmarshalled message", "message", kafkaMsg)
 
 	// Convert to domain entities
 	transaction, err := h.kafkaMessageToEntity(&kafkaMsg)
