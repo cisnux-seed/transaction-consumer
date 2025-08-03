@@ -32,7 +32,7 @@ type KafkaTransactionMessage struct {
 	TransactionID            string        `json:"transactionId"`
 	TransactionType          string        `json:"transactionType"`
 	TransactionStatus        string        `json:"transactionStatus"`
-	Amount                   float64       `json:"amount"` // Amount in cents
+	Amount                   float64       `json:"amount"`
 	BalanceBefore            float64       `json:"balanceBefore"`
 	BalanceAfter             float64       `json:"balanceAfter"`
 	Currency                 string        `json:"currency"`
@@ -54,6 +54,9 @@ func (h *TransactionHandler) HandleMessage(ctx context.Context, message []byte) 
 	if err := json.Unmarshal(message, &kafkaMsg); err != nil {
 		return fmt.Errorf("failed to unmarshal message: %w", err)
 	}
+
+	log := logger.NewLogger()
+	log.Info("Processing transaction message", kafkaMsg)
 
 	// Convert to domain entities
 	transaction, err := h.kafkaMessageToEntity(&kafkaMsg)
