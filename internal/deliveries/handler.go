@@ -86,9 +86,6 @@ func (h *TransactionHandler) kafkaMessageToEntity(msg *KafkaTransactionMessage) 
 		updatedAt = time.Now().UTC()
 	}
 
-	// Convert amount from cents to decimal
-	amount := float64(msg.Amount) / 100.0
-
 	transaction := &entities.Transaction{
 		ID:                       msg.ID,
 		UserID:                   msg.UserID,
@@ -96,7 +93,7 @@ func (h *TransactionHandler) kafkaMessageToEntity(msg *KafkaTransactionMessage) 
 		TransactionID:            msg.TransactionID,
 		TransactionType:          entities.TransactionType(msg.TransactionType),
 		TransactionStatus:        entities.TransactionStatus(msg.TransactionStatus),
-		Amount:                   amount,
+		Amount:                   msg.Amount,
 		BalanceBefore:            msg.BalanceBefore,
 		BalanceAfter:             msg.BalanceAfter,
 		Currency:                 msg.Currency,
