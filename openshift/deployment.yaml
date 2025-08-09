@@ -86,25 +86,21 @@ spec:
               value: "false"
           resources:
             requests:
+              cpu: "100m"
               memory: "256Mi"
             limits:
               memory: "512Mi"
+              cpu: "500m"
           livenessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - "pgrep transaction-consumer"
+            tcpSocket:
+              port: 8080
             initialDelaySeconds: 30
             periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - "pgrep transaction-consumer"
+            tcpSocket:
+              port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 3
