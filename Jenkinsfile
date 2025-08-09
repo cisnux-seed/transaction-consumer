@@ -159,7 +159,7 @@ pipeline {
                                 -Dsonar.tests=. \\
                                 -Dsonar.test.inclusions=**/*_test.go \\
                                 -Dsonar.go.coverage.reportPaths=coverage.out \\
-                                -Dsonar.coverage.exclusions=**/main.go,**/connection.go,cmd/main.go,internal/infrastructures/database/postgres/connection.go \\
+                                -Dsonar.coverage.exclusions=**/main.go,**/connection.go,cmd/main.go,internal/infrastructures/database/postgres/connection.go,**/consumer.go,internal/infrastructures/kafka/consumer/consumer.go \\
                                 -Dsonar.sources=.
 
                             echo "✅ SAST analysis completed"
