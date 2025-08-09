@@ -12,6 +12,131 @@ pipeline {
     }
 
     stages {
+        stage('Pipeline Started') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                        discordSend(
+                            webhookURL: DISCORD_WEBHOOK,
+                            title: "🚀 Pipeline Started",
+                            description: "Starting deployment pipeline for **${APP_NAME}:${SEMANTIC_VERSION}**\n" +
+                                       "**Branch:** ${env.BRANCH_NAME ?: 'main'}\n" +
+                                       "**Build:** #${BUILD_NUMBER}\n" +
+                                       "**Job:** ${JOB_NAME}",
+                            link: env.BUILD_URL,
+                            result: "SUCCESS",
+                            thumbnail: "https://www.jenkins.io/images/logos/jenkins/jenkins.png"
+                        )
+                    }
+                }
+            }
+        }
+
+        stage('Test & Coverage') {
+            steps {
+                script {
+                    echo "Running tests and generating coverage report..."
+
+                    sh """
+                        echo "📦 Installing dependencies..."
+                        go mod download
+                        go mod tidy
+
+                        echo "🧪 Running tests with coverage..."
+                        go test -v -covermode=atomic -coverprofile=coverage.out -coverpkg=./... ./...
+
+                        echo "📊 Coverage summary:"
+                        go tool cover -func=coverage.out | grep total || true
+
+                        echo "✅ Test and coverage generation completed"
+                    """
+                }
+            }
+        }
+
+        stage('Integration Tests') {
+            failFast true
+            parallel {
+                stage('PostgreSQL Integration Test') {
+                    steps {
+                        script {
+                            echo "Running PostgreSQL integration tests..."
+
+                            retry(10) {
+                                sh '''
+                                    echo "Attempting to connect to PostgreSQL..."
+
+                                    # Direct pipe approach - no command substitution
+                                    if curl -v --connect-timeout 5 --max-time 5 telnet://postgresql-service.one-gate-payment.svc.cluster.local:5432 2>&1 | grep -q "Connected to"; then
+                                        echo "✅ Successfully connected to PostgreSQL"
+                                    else
+                                        echo "❌ Connection attempt failed, retrying..."
+                                        sleep 5
+                                        exit 1
+                                    fi
+                                '''
+                            }
+                        }
+                    }
+                }
+
+                stage('Kafka Integration Test') {
+                    steps {
+                        script {
+                            echo "Running Kafka integration tests..."
+
+                            retry(10) {
+                                sh '''
+                                    echo "Attempting to connect to Kafka..."
+
+                                    # Direct pipe approach - no command substitution
+                                    if curl -v --connect-timeout 5 --max-time 5 telnet://one-gate-payment-kafka-kafka-bootstrap.one-gate-payment.svc.cluster.local:9092 2>&1 | grep -q "Connected to"; then
+                                        echo "✅ Successfully connected to Kafka"
+                                    else
+                                        echo "❌ Connection attempt failed, retrying..."
+                                        sleep 5
+                                        exit 1
+                                    fi
+                                '''
+                            }
+                        }
+                    }
+                }
+            }
+            post {
+                success {
+                    script {
+                        withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                            discordSend(
+                                webhookURL: DISCORD_WEBHOOK,
+                                title: "✅ Integration Tests Completed",
+                                description: "All integration tests passed successfully!\n" +
+                                           "**PostgreSQL:** ✅ Connected\n" +
+                                           "**Kafka:** ✅ Connected",
+                                link: env.BUILD_URL,
+                                result: "SUCCESS"
+                            )
+                        }
+                    }
+                }
+                failure {
+                    script {
+                        withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                            discordSend(
+                                webhookURL: DISCORD_WEBHOOK,
+                                title: "❌ Integration Tests Failed",
+                                description: "One or more integration tests failed.\n" +
+                                           "**Build:** #${BUILD_NUMBER}\n" +
+                                           "Please check the Jenkins logs for details.",
+                                link: env.BUILD_URL,
+                                result: "FAILURE"
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         stage('SAST Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
@@ -26,10 +151,47 @@ pipeline {
                             ${scannerHome}/bin/sonar-scanner \\
                                 -Dsonar.projectKey=transaction-consumer \\
                                 -Dsonar.projectName='transaction-consumer' \\
+                                -Dsonar.exclusions=**/*_test.go,**/vendor/**,**/testdata/**,**/*.pb.go \\
+                                -Dsonar.tests=. \\
+                                -Dsonar.test.inclusions=**/*_test.go \\
+                                -Dsonar.go.coverage.reportPaths=coverage.out \\
+                                -Dsonar.coverage.exclusions=**/main.go,**/connection.go,cmd/main.go,internal/infrastructures/database/postgres/connection.go \\
                                 -Dsonar.sources=.
 
                             echo "✅ SAST analysis completed"
                         """
+                    }
+                }
+            }
+            post {
+                success {
+                    script {
+                        withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                            discordSend(
+                                webhookURL: DISCORD_WEBHOOK,
+                                title: "✅ SAST Analysis Completed",
+                                description: "SonarQube analysis completed successfully!\n" +
+                                           "**Coverage Report:** Generated\n" +
+                                           "**Security Analysis:** Passed",
+                                link: env.BUILD_URL,
+                                result: "SUCCESS"
+                            )
+                        }
+                    }
+                }
+                failure {
+                    script {
+                        withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                            discordSend(
+                                webhookURL: DISCORD_WEBHOOK,
+                                title: "❌ SAST Analysis Failed",
+                                description: "SonarQube analysis failed.\n" +
+                                           "**Build:** #${BUILD_NUMBER}\n" +
+                                           "Check SonarQube dashboard and Jenkins logs.",
+                                link: env.BUILD_URL,
+                                result: "FAILURE"
+                            )
+                        }
                     }
                 }
             }
@@ -38,6 +200,17 @@ pipeline {
         stage('Build with OpenShift BuildConfig') {
             steps {
                 script {
+                    withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                        discordSend(
+                            webhookURL: DISCORD_WEBHOOK,
+                            title: "🔨 Building Application",
+                            description: "Starting OpenShift build for **${APP_NAME}:${SEMANTIC_VERSION}**\n" +
+                                       "This may take a few minutes...",
+                            link: env.BUILD_URL,
+                            result: "SUCCESS"
+                        )
+                    }
+
                     echo "Triggering OpenShift build for ${APP_NAME}:${SEMANTIC_VERSION}"
 
                     sh """
@@ -99,6 +272,39 @@ EOF
                     """
                 }
             }
+            post {
+                success {
+                    script {
+                        withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                            discordSend(
+                                webhookURL: DISCORD_WEBHOOK,
+                                title: "✅ Build Successful",
+                                description: "Docker image built successfully!\n" +
+                                           "**Tags created:**\n" +
+                                           "• `${APP_NAME}:latest`\n" +
+                                           "• `${APP_NAME}:${SEMANTIC_VERSION}`",
+                                link: env.BUILD_URL,
+                                result: "SUCCESS"
+                            )
+                        }
+                    }
+                }
+                failure {
+                    script {
+                        withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                            discordSend(
+                                webhookURL: DISCORD_WEBHOOK,
+                                title: "❌ Build Failed",
+                                description: "OpenShift build failed for **${APP_NAME}:${SEMANTIC_VERSION}**\n" +
+                                           "**Build:** #${BUILD_NUMBER}\n" +
+                                           "Check Jenkins logs and OpenShift build logs for details.",
+                                link: env.BUILD_URL,
+                                result: "FAILURE"
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         stage('Apply OpenShift Resources') {
@@ -118,11 +324,39 @@ EOF
                     """
                 }
             }
+            post {
+                success {
+                    script {
+                        withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                            discordSend(
+                                webhookURL: DISCORD_WEBHOOK,
+                                title: "⚙️ Resources Applied",
+                                description: "OpenShift resources applied successfully!\n" +
+                                           "**Applied:**\n" +
+                                           "• Secrets\n• Service\n• Deployment",
+                                link: env.BUILD_URL,
+                                result: "SUCCESS"
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         stage('Deploy Application') {
             steps {
                 script {
+                    withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                        discordSend(
+                            webhookURL: DISCORD_WEBHOOK,
+                            title: "🚀 Deploying Application",
+                            description: "Starting deployment of **${APP_NAME}:${SEMANTIC_VERSION}**\n" +
+                                       "Rolling out to OpenShift cluster...",
+                            link: env.BUILD_URL,
+                            result: "SUCCESS"
+                        )
+                    }
+
                     echo "Deploying application with latest image..."
 
                     sh """
@@ -151,11 +385,84 @@ EOF
                     """
                 }
             }
+            post {
+                success {
+                    script {
+                        withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                            discordSend(
+                                webhookURL: DISCORD_WEBHOOK,
+                                title: "🎉 Deployment Successful",
+                                description: "Application deployed successfully!\n" +
+                                           "**Service:** `${APP_NAME}:${SEMANTIC_VERSION}`\n" +
+                                           "**Namespace:** `${NAMESPACE}`\n" +
+                                           "**Registry:** Available with tags `latest` and `${SEMANTIC_VERSION}`\n\n" +
+                                           "**Access via port-forward:**\n" +
+                                           "`oc port-forward svc/${APP_NAME} 8080:8080 -n ${NAMESPACE}`",
+                                link: env.BUILD_URL,
+                                result: "SUCCESS"
+                            )
+                        }
+                    }
+                }
+                failure {
+                    script {
+                        withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                            discordSend(
+                                webhookURL: DISCORD_WEBHOOK,
+                                title: "❌ Deployment Failed",
+                                description: "Deployment failed for **${APP_NAME}:${SEMANTIC_VERSION}**\n" +
+                                           "**Build:** #${BUILD_NUMBER}\n" +
+                                           "Check OpenShift rollout status and pod logs.",
+                                link: env.BUILD_URL,
+                                result: "FAILURE"
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 
     post {
+        always {
+            script {
+                // Archive test results and coverage reports
+                sh """
+                    echo "📁 Archiving test results and coverage..."
+                    # Coverage file should exist for SonarQube
+                    if [ -f coverage.out ]; then
+                        echo "✅ Coverage file exists"
+                        ls -la coverage.out
+                    else
+                        echo "⚠️  Coverage file not found"
+                    fi
+                """
+            }
+        }
         success {
+            script {
+                def duration = currentBuild.durationString.replace(' and counting', '')
+                withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                    discordSend(
+                        webhookURL: DISCORD_WEBHOOK,
+                        title: "🎉 Pipeline Completed Successfully!",
+                        description: "**Application:** ${APP_NAME}\n" +
+                                   "**Version:** ${SEMANTIC_VERSION}\n" +
+                                   "**Build:** #${BUILD_NUMBER}\n" +
+                                   "**Duration:** ${duration}\n" +
+                                   "**Branch:** ${env.BRANCH_NAME ?: 'main'}\n\n" +
+                                   "**Images available:**\n" +
+                                   "• `${APP_NAME}:latest`\n" +
+                                   "• `${APP_NAME}:${SEMANTIC_VERSION}`\n\n" +
+                                   "**Access the service:**\n" +
+                                   "`oc port-forward svc/${APP_NAME} 8080:8080 -n ${NAMESPACE}`",
+                        link: env.BUILD_URL,
+                        result: "SUCCESS",
+                        thumbnail: "https://www.jenkins.io/images/logos/jenkins/jenkins.png"
+                    )
+                }
+            }
+
             echo "🎉 Pipeline completed successfully!"
             echo "Application deployed using OpenShift BuildConfig"
             echo "Images available:"
@@ -167,12 +474,64 @@ EOF
         }
         failure {
             script {
+                def duration = currentBuild.durationString.replace(' and counting', '')
+                withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                    discordSend(
+                        webhookURL: DISCORD_WEBHOOK,
+                        title: "❌ Pipeline Failed!",
+                        description: "**Application:** ${APP_NAME}\n" +
+                                   "**Build:** #${BUILD_NUMBER}\n" +
+                                   "**Duration:** ${duration}\n" +
+                                   "**Branch:** ${env.BRANCH_NAME ?: 'main'}\n" +
+                                   "**Failed Stage:** ${env.STAGE_NAME ?: 'Unknown'}\n\n" +
+                                   "Check the Jenkins console logs for detailed error information.",
+                        link: env.BUILD_URL,
+                        result: "FAILURE"
+                    )
+                }
+
                 echo "❌ Pipeline failed! Check the logs above for details."
                 // Show build logs if build failed
                 sh """
                     echo "=== Recent Build Logs ==="
                     oc logs -l build=${APP_NAME} --tail=50 -n ${NAMESPACE} || true
                 """
+            }
+        }
+        aborted {
+            script {
+                def duration = currentBuild.durationString.replace(' and counting', '')
+                withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                    discordSend(
+                        webhookURL: DISCORD_WEBHOOK,
+                        title: "⚠️ Pipeline Aborted",
+                        description: "**Application:** ${APP_NAME}\n" +
+                                   "**Build:** #${BUILD_NUMBER}\n" +
+                                   "**Duration:** ${duration}\n" +
+                                   "**Branch:** ${env.BRANCH_NAME ?: 'main'}\n\n" +
+                                   "The pipeline was manually aborted or timed out.",
+                        link: env.BUILD_URL,
+                        result: "ABORTED"
+                    )
+                }
+            }
+        }
+        unstable {
+            script {
+                def duration = currentBuild.durationString.replace(' and counting', '')
+                withCredentials([string(credentialsId: 'discord-webhook-url', variable: 'DISCORD_WEBHOOK')]) {
+                    discordSend(
+                        webhookURL: DISCORD_WEBHOOK,
+                        title: "⚠️ Pipeline Unstable",
+                        description: "**Application:** ${APP_NAME}\n" +
+                                   "**Build:** #${BUILD_NUMBER}\n" +
+                                   "**Duration:** ${duration}\n" +
+                                   "**Branch:** ${env.BRANCH_NAME ?: 'main'}\n\n" +
+                                   "The pipeline completed with warnings or test failures.",
+                        link: env.BUILD_URL,
+                        result: "UNSTABLE"
+                    )
+                }
             }
         }
     }
