@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    tools {
+        go 'Go 1.24.5'
+    }
+
     environment {
         REGISTRY = 'image-registry.openshift-image-registry.svc:5000'
         NAMESPACE = 'one-gate-payment'
