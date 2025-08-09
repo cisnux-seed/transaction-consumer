@@ -1,0 +1,956 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>cmd: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">transaction-consumer/cmd/main.go (0.0%)</option>
+				
+				<option value="file1">transaction-consumer/internal/deliveries/handler.go (92.3%)</option>
+				
+				<option value="file2">transaction-consumer/internal/domain/entities/transaction.go (100.0%)</option>
+				
+				<option value="file3">transaction-consumer/internal/infrastructures/config/config.go (97.6%)</option>
+				
+				<option value="file4">transaction-consumer/internal/infrastructures/database/postgres/connection.go (0.0%)</option>
+				
+				<option value="file5">transaction-consumer/internal/infrastructures/database/postgres/transaction_repository.go (100.0%)</option>
+				
+				<option value="file6">transaction-consumer/internal/infrastructures/kafka/consumer/consumer.go (0.0%)</option>
+				
+				<option value="file7">transaction-consumer/internal/usecases/transaction_usecase.go (100.0%)</option>
+				
+				<option value="file8">transaction-consumer/pkg/logger/logger.go (100.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package main
+
+import (
+        "context"
+        "gorm.io/gorm"
+        "os"
+        "os/signal"
+        "syscall"
+        "time"
+        "transaction-consumer/internal/infrastructures/config"
+        "transaction-consumer/internal/infrastructures/database/postgres"
+        "transaction-consumer/internal/usecases"
+        "transaction-consumer/pkg/logger"
+
+        kafkahandler "transaction-consumer/internal/deliveries"
+        kafkainfra "transaction-consumer/internal/infrastructures/kafka/consumer"
+)
+
+func main() <span class="cov0" title="0">{
+        // Initialize logger
+        log := logger.NewLogger()
+
+        // Load configuration
+        cfg, err := config.Load()
+        if err != nil </span><span class="cov0" title="0">{
+                log.Fatal("Failed to load configuration", "error", err)
+        }</span>
+
+        // Initialize database
+        <span class="cov0" title="0">db, err := postgres.NewConnection(cfg.Database, cfg.App)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Fatal("Failed to connect to database", "error", err)
+        }</span>
+        <span class="cov0" title="0">defer func(db *gorm.DB) </span><span class="cov0" title="0">{
+                err := postgres.CloseConnection(db)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Error("Failed to close database connection", "error", err)
+                }</span> else<span class="cov0" title="0"> {
+                        log.Info("Database connection closed successfully")
+                }</span>
+        }(db)
+
+        // Initialize repository
+        <span class="cov0" title="0">transactionRepo := postgres.NewTransactionRepository(db, log)
+
+        // Initialize use case
+        transactionUsecase := usecases.NewTransactionUseCase(transactionRepo, log)
+
+        // Initialize Kafka consumer
+        kafkaConsumer, err := kafkainfra.NewConsumer(cfg.Kafka, log)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Fatal("Failed to create Kafka consumer", "error", err)
+        }</span>
+        <span class="cov0" title="0">defer func(kafkaConsumer *kafkainfra.Consumer) </span><span class="cov0" title="0">{
+                err := kafkaConsumer.Close()
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Error("Failed to close Kafka consumer", "error", err)
+                }</span> else<span class="cov0" title="0"> {
+                        log.Info("Kafka consumer closed successfully")
+                }</span>
+        }(kafkaConsumer)
+
+        // Initialize Kafka handler
+        <span class="cov0" title="0">kafkaHandler := kafkahandler.NewTransactionHandler(transactionUsecase, log)
+
+        // Start consuming
+        ctx, cancel := context.WithCancel(context.Background())
+        defer cancel()
+
+        // Start consumer in goroutine
+        go func() </span><span class="cov0" title="0">{
+                if err := kafkaConsumer.Consume(ctx, kafkaHandler.HandleMessage); err != nil </span><span class="cov0" title="0">{
+                        log.Error("Kafka consumer error", "error", err)
+                }</span>
+        }()
+
+        // Wait for interrupt signal
+        <span class="cov0" title="0">sigChan := make(chan os.Signal, 1)
+        signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+        &lt;-sigChan
+
+        log.Info("Shutting down...")
+        cancel()
+        time.Sleep(2 * time.Second)</span> // Grace period
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package deliveries
+
+import (
+        "context"
+        "encoding/json"
+        "fmt"
+        "time"
+        "transaction-consumer/internal/domain/entities"
+        "transaction-consumer/internal/usecases"
+        "transaction-consumer/pkg/logger"
+)
+
+// TransactionHandler handles transaction messages from Kafka
+type TransactionHandler struct {
+        transactionUseCase usecases.TransactionUseCase
+        logger             logger.Logger
+}
+
+// NewTransactionHandler creates a new transaction handler
+func NewTransactionHandler(uc usecases.TransactionUseCase, log logger.Logger) *TransactionHandler <span class="cov8" title="1">{
+        return &amp;TransactionHandler{
+                transactionUseCase: uc,
+                logger:             log,
+        }
+}</span>
+
+// KafkaTransactionMessage represents the incoming Kafka message structure
+type KafkaTransactionMessage struct {
+        ID                       string        `json:"id"`
+        UserID                   int64         `json:"userId"`
+        AccountID                string        `json:"accountId"`
+        TransactionID            string        `json:"transactionId"`
+        TransactionType          string        `json:"transactionType"`
+        TransactionStatus        string        `json:"transactionStatus"`
+        Amount                   float64       `json:"amount"`
+        BalanceBefore            float64       `json:"balanceBefore"`
+        BalanceAfter             float64       `json:"balanceAfter"`
+        Currency                 string        `json:"currency"`
+        Description              string        `json:"description"`
+        ExternalReference        *string       `json:"externalReference"`
+        PaymentMethod            string        `json:"paymentMethod"`
+        Metadata                 *string       `json:"metadata"`
+        IsAccessibleFromExternal bool          `json:"isAccessibleFromExternal"`
+        CreatedAt                []interface{} `json:"createdAt"`
+        UpdatedAt                []interface{} `json:"updatedAt"`
+}
+
+// HandleMessage handles incoming transaction messages
+func (h *TransactionHandler) HandleMessage(ctx context.Context, message []byte) error <span class="cov8" title="1">{
+        h.logger.Debug("Received message", "message", string(message))
+
+        // Parse message
+        var kafkaMsg KafkaTransactionMessage
+        if err := json.Unmarshal(message, &amp;kafkaMsg); err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to unmarshal message: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">h.logger.Debug("Unmarshalled message", "message", kafkaMsg)
+
+        // Convert to domain entities
+        transaction, err := h.kafkaMessageToEntity(&amp;kafkaMsg)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to convert message to entities: %w", err)
+        }</span>
+
+        // Process transaction through use case
+        <span class="cov8" title="1">if err := h.transactionUseCase.ProcessTransaction(ctx, transaction); err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to process transaction: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// kafkaMessageToEntity converts Kafka message to domain entities
+func (h *TransactionHandler) kafkaMessageToEntity(msg *KafkaTransactionMessage) (*entities.Transaction, error) <span class="cov8" title="1">{
+        // Parse timestamps
+        createdAt, err := h.parseTimestamp(msg.CreatedAt)
+        if err != nil </span><span class="cov8" title="1">{
+                h.logger.Warn("Failed to parse createdAt, using current time", "error", err)
+                createdAt = time.Now().UTC()
+        }</span>
+
+        <span class="cov8" title="1">updatedAt, err := h.parseTimestamp(msg.UpdatedAt)
+        if err != nil </span><span class="cov0" title="0">{
+                h.logger.Warn("Failed to parse updatedAt, using current time", "error", err)
+                updatedAt = time.Now().UTC()
+        }</span>
+
+        <span class="cov8" title="1">transaction := &amp;entities.Transaction{
+                ID:                       msg.ID,
+                UserID:                   msg.UserID,
+                AccountID:                msg.AccountID,
+                TransactionID:            msg.TransactionID,
+                TransactionType:          entities.TransactionType(msg.TransactionType),
+                TransactionStatus:        entities.TransactionStatus(msg.TransactionStatus),
+                Amount:                   msg.Amount,
+                BalanceBefore:            msg.BalanceBefore,
+                BalanceAfter:             msg.BalanceAfter,
+                Currency:                 msg.Currency,
+                ExternalReference:        msg.ExternalReference,
+                Metadata:                 msg.Metadata,
+                IsAccessibleFromExternal: msg.IsAccessibleFromExternal,
+                CreatedAt:                createdAt,
+                UpdatedAt:                updatedAt,
+        }
+
+        // Set description if not empty
+        if msg.Description != "" </span><span class="cov8" title="1">{
+                transaction.Description = &amp;msg.Description
+        }</span>
+
+        // Set payment method if not empty
+        <span class="cov8" title="1">if msg.PaymentMethod != "" </span><span class="cov8" title="1">{
+                paymentMethod := entities.PaymentMethod(msg.PaymentMethod)
+                transaction.PaymentMethod = &amp;paymentMethod
+        }</span>
+
+        <span class="cov8" title="1">return transaction, nil</span>
+}
+
+// parseTimestamp converts array timestamp to time.Time
+func (h *TransactionHandler) parseTimestamp(timestampArray []interface{}) (time.Time, error) <span class="cov8" title="1">{
+        if len(timestampArray) &lt; 6 </span><span class="cov8" title="1">{
+                return time.Time{}, fmt.Errorf("invalid timestamp array length: %d", len(timestampArray))
+        }</span>
+
+        <span class="cov8" title="1">year := int(timestampArray[0].(float64))
+        month := int(timestampArray[1].(float64))
+        day := int(timestampArray[2].(float64))
+        hour := int(timestampArray[3].(float64))
+        minute := int(timestampArray[4].(float64))
+        second := int(timestampArray[5].(float64))
+
+        var nanosecond int
+        if len(timestampArray) &gt; 6 </span><span class="cov8" title="1">{
+                nanosecond = int(timestampArray[6].(float64))
+        }</span>
+
+        <span class="cov8" title="1">return time.Date(year, time.Month(month), day, hour, minute, second, nanosecond, time.UTC), nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package entities
+
+import (
+        "time"
+)
+
+type TransactionType string
+
+const (
+        TransactionTypeTopup    TransactionType = "TOPUP"
+        TransactionTypePayment  TransactionType = "PAYMENT"
+        TransactionTypeRefund   TransactionType = "REFUND"
+        TransactionTypeTransfer TransactionType = "TRANSFER"
+)
+
+type TransactionStatus string
+
+const (
+        TransactionStatusPending   TransactionStatus = "PENDING"
+        TransactionStatusSuccess   TransactionStatus = "SUCCESS"
+        TransactionStatusFailed    TransactionStatus = "FAILED"
+        TransactionStatusCancelled TransactionStatus = "CANCELLED"
+)
+
+type PaymentMethod string
+
+type Transaction struct {
+        ID                       string
+        UserID                   int64
+        AccountID                string
+        TransactionID            string
+        TransactionType          TransactionType
+        TransactionStatus        TransactionStatus
+        Amount                   float64
+        BalanceBefore            float64
+        BalanceAfter             float64
+        Currency                 string
+        Description              *string
+        ExternalReference        *string
+        PaymentMethod            *PaymentMethod
+        Metadata                 *string
+        IsAccessibleFromExternal bool
+        CreatedAt                time.Time
+        UpdatedAt                time.Time
+}
+
+// IsValid validates the transaction entity
+func (t *Transaction) IsValid() bool <span class="cov8" title="1">{
+        return t.UserID &gt; 0 &amp;&amp;
+                t.AccountID != "" &amp;&amp;
+                t.TransactionID != "" &amp;&amp;
+                t.TransactionType != "" &amp;&amp;
+                t.Amount &gt; 0
+}</span>
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package config
+
+import (
+        "fmt"
+        "github.com/caarlos0/env/v11"
+        "log"
+        "strings"
+        "time"
+)
+
+type Config struct {
+        Kafka    KafkaConfig    `envPrefix:"KAFKA_"`
+        Database DatabaseConfig `envPrefix:"DB_"`
+        App      AppConfig      `envPrefix:"APP_"`
+}
+
+// KafkaConfig holds Kafka configuration
+type KafkaConfig struct {
+        Brokers        []string      `env:"BROKERS,required" envSeparator:","`
+        Topic          string        `env:"TOPIC,required"`
+        GroupID        string        `env:"GROUP_ID,required"`
+        CommitInterval time.Duration `env:"COMMIT_INTERVAL" envDefault:"2s"`
+        MaxBytes       int           `env:"MAX_BYTES" envDefault:"10485760"`
+}
+
+// DatabaseConfig holds database configuration
+type DatabaseConfig struct {
+        Host            string        `env:"HOST,required"`
+        Port            int           `env:"PORT" envDefault:"5432"`
+        User            string        `env:"USER,required"`
+        Password        string        `env:"PASSWORD,required"`
+        Name            string        `env:"NAME,required"`
+        SSLMode         string        `env:"SSLMODE" envDefault:"require"`
+        MaxIdleConns    int           `env:"MAX_IDLE_CONNS" envDefault:"10"`
+        MaxOpenConns    int           `env:"MAX_OPEN_CONNS" envDefault:"100"`
+        ConnMaxLifetime time.Duration `env:"CONN_MAX_LIFETIME" envDefault:"1h"`
+}
+
+// AppConfig holds application configuration
+type AppConfig struct {
+        LogLevel    string `env:"LOG_LEVEL" envDefault:"info"`
+        Environment string `env:"ENVIRONMENT" envDefault:"production"`
+        Port        int    `env:"PORT" envDefault:"8080"`
+        Debug       bool   `env:"DEBUG" envDefault:"false"`
+}
+
+// Load loads configuration from environment variables
+func Load() (*Config, error) <span class="cov8" title="1">{
+        cfg := &amp;Config{}
+
+        // Parse environment variables into the struct
+        if err := env.Parse(cfg); err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to parse environment variables: %w", err)
+        }</span>
+
+        // Additional validation
+        <span class="cov8" title="1">if err := cfg.Validate(); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("configuration validation failed: %w", err)
+        }</span>
+
+        // Log configuration (without sensitive data)
+        <span class="cov8" title="1">cfg.LogConfig()
+
+        return cfg, nil</span>
+}
+
+// Validate validates the configuration
+func (c *Config) Validate() error <span class="cov8" title="1">{
+        // Kafka validation
+        if len(c.Kafka.Brokers) == 0 </span><span class="cov8" title="1">{
+                return fmt.Errorf("KAFKA_BROKERS cannot be empty")
+        }</span>
+
+        <span class="cov8" title="1">for i, broker := range c.Kafka.Brokers </span><span class="cov8" title="1">{
+                c.Kafka.Brokers[i] = strings.TrimSpace(broker)
+                if c.Kafka.Brokers[i] == "" </span><span class="cov8" title="1">{
+                        return fmt.Errorf("KAFKA_BROKERS contains empty broker at index %d", i)
+                }</span>
+        }
+
+        // Database validation
+        <span class="cov8" title="1">if c.Database.Port &lt;= 0 || c.Database.Port &gt; 65535 </span><span class="cov8" title="1">{
+                return fmt.Errorf("DB_PORT must be between 1 and 65535, got: %d", c.Database.Port)
+        }</span>
+
+        <span class="cov8" title="1">validSSLModes := []string{"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}
+        if !contains(validSSLModes, c.Database.SSLMode) </span><span class="cov8" title="1">{
+                return fmt.Errorf("DB_SSLMODE must be one of: %s, got: %s",
+                        strings.Join(validSSLModes, ", "), c.Database.SSLMode)
+        }</span>
+
+        <span class="cov8" title="1">validLogLevels := []string{"debug", "info", "warn", "error", "fatal"}
+        if !contains(validLogLevels, strings.ToLower(c.App.LogLevel)) </span><span class="cov8" title="1">{
+                return fmt.Errorf("APP_LOG_LEVEL must be one of: %s, got: %s",
+                        strings.Join(validLogLevels, ", "), c.App.LogLevel)
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// LogConfig logs the current configuration (without sensitive data)
+func (c *Config) LogConfig() <span class="cov8" title="1">{
+        log.Printf("Configuration loaded:")
+        log.Printf("  Environment: %s", c.App.Environment)
+        log.Printf("  Log Level: %s", c.App.LogLevel)
+        log.Printf("  Port: %d", c.App.Port)
+        log.Printf("  Debug: %t", c.App.Debug)
+        log.Printf("  Kafka Brokers: %s", strings.Join(c.Kafka.Brokers, ", "))
+        log.Printf("  Kafka Topic: %s", c.Kafka.Topic)
+        log.Printf("  Kafka Group ID: %s", c.Kafka.GroupID)
+        log.Printf("  Database Host: %s", c.Database.Host)
+        log.Printf("  Database Port: %d", c.Database.Port)
+        log.Printf("  Database Name: %s", c.Database.Name)
+        log.Printf("  Database SSL Mode: %s", c.Database.SSLMode)
+}</span>
+
+// IsDevelopment returns true if running in development mode
+func (c *Config) IsDevelopment() bool <span class="cov8" title="1">{
+        return strings.ToLower(c.App.Environment) == "development"
+}</span>
+
+// IsProduction returns true if running in production mode
+func (c *Config) IsProduction() bool <span class="cov8" title="1">{
+        return strings.ToLower(c.App.Environment) == "production"
+}</span>
+
+// GetDSN returns the database connection string
+func (c *Config) GetDSN() string <span class="cov8" title="1">{
+        return fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=%s TimeZone=UTC",
+                c.Database.Host, c.Database.User, c.Database.Password,
+                c.Database.Name, c.Database.Port, c.Database.SSLMode)
+}</span>
+
+// helper function to check if slice contains string
+func contains(slice []string, item string) bool <span class="cov8" title="1">{
+        for _, s := range slice </span><span class="cov8" title="1">{
+                if strings.EqualFold(s, item) </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        <span class="cov8" title="1">return false</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package postgres
+
+import (
+        "fmt"
+        "gorm.io/driver/postgres"
+        "gorm.io/gorm"
+        "gorm.io/gorm/logger"
+        "time"
+        "transaction-consumer/internal/infrastructures/config"
+)
+
+// NewConnection creates a new database connection
+func NewConnection(cfg config.DatabaseConfig, appConfig config.AppConfig) (*gorm.DB, error) <span class="cov0" title="0">{
+        // Use the config's DSN method
+        dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=%s TimeZone=UTC",
+                cfg.Host, cfg.User, cfg.Password, cfg.Name, cfg.Port, cfg.SSLMode)
+
+        // Configure GORM logger level based on app environment and log level
+        var gormLogLevel logger.LogLevel
+        if appConfig.Environment == "development" || appConfig.Debug </span><span class="cov0" title="0">{
+                switch appConfig.LogLevel </span>{
+                case "debug":<span class="cov0" title="0">
+                        gormLogLevel = logger.Info</span>
+                case "info":<span class="cov0" title="0">
+                        gormLogLevel = logger.Warn</span>
+                default:<span class="cov0" title="0">
+                        gormLogLevel = logger.Error</span>
+                }
+        } else<span class="cov0" title="0"> {
+                gormLogLevel = logger.Error // Production: only errors
+        }</span>
+
+        <span class="cov0" title="0">db, err := gorm.Open(postgres.Open(dsn), &amp;gorm.Config{
+                Logger: logger.Default.LogMode(gormLogLevel),
+                NowFunc: func() time.Time </span><span class="cov0" title="0">{
+                        return time.Now().UTC()
+                }</span>,
+        })
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to connect to database: %w", err)
+        }</span>
+
+        // Configure connection pool with values from config
+        <span class="cov0" title="0">sqlDB, err := db.DB()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get database instance: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
+        sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
+        sqlDB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+
+        // Test connection
+        if err := sqlDB.Ping(); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to ping database: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return db, nil</span>
+}
+
+// CloseConnection closes the database connection
+func CloseConnection(db *gorm.DB) error <span class="cov0" title="0">{
+        sqlDB, err := db.DB()
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov0" title="0">return sqlDB.Close()</span>
+}
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package postgres
+
+import (
+        "context"
+        "fmt"
+        "gorm.io/gorm"
+        "time"
+        "transaction-consumer/internal/domain/entities"
+        "transaction-consumer/internal/domain/repositories"
+        "transaction-consumer/pkg/logger"
+)
+
+// TransactionModel represents the database model
+type TransactionModel struct {
+        ID                       string    `gorm:"primaryKey;type:varchar(36);default:gen_random_uuid()"`
+        UserID                   int64     `gorm:"not null;index"`
+        AccountID                string    `gorm:"not null;index;type:varchar(36)"`
+        TransactionID            string    `gorm:"not null;uniqueIndex;type:varchar(50)"`
+        TransactionType          string    `gorm:"not null;type:transaction_type_enum"`
+        TransactionStatus        string    `gorm:"not null;index;type:transaction_status_enum"`
+        Amount                   float64   `gorm:"not null;type:decimal(15,2)"`
+        BalanceBefore            float64   `gorm:"not null;type:decimal(15,2)"`
+        BalanceAfter             float64   `gorm:"not null;type:decimal(15,2)"`
+        Currency                 string    `gorm:"not null;default:IDR;type:varchar(3)"`
+        Description              *string   `gorm:"type:text"`
+        ExternalReference        *string   `gorm:"type:varchar(255)"`
+        PaymentMethod            *string   `gorm:"type:payment_method_enum"`
+        Metadata                 *string   `gorm:"type:text"`
+        IsAccessibleFromExternal bool      `gorm:"not null;default:true;column:is_accessible_external"`
+        CreatedAt                time.Time `gorm:"not null;default:now()"`
+        UpdatedAt                time.Time `gorm:"not null;default:now()"`
+}
+
+// TableName returns the table name
+func (TransactionModel) TableName() string <span class="cov8" title="1">{
+        return "historical_transactions"
+}</span>
+
+// transactionRepository implements the repositories interface
+type transactionRepository struct {
+        db     *gorm.DB
+        logger logger.Logger
+}
+
+// NewTransactionRepository creates a new transaction repositories
+func NewTransactionRepository(db *gorm.DB, log logger.Logger) repositories.TransactionRepository <span class="cov8" title="1">{
+        return &amp;transactionRepository{
+                db:     db,
+                logger: log,
+        }
+}</span>
+
+// Create creates a new transaction
+func (r *transactionRepository) Create(ctx context.Context, transaction *entities.Transaction) error <span class="cov8" title="1">{
+        model := r.entityToModel(transaction)
+
+        if err := r.db.WithContext(ctx).Create(model).Error; err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to create transaction: %w", err)
+        }</span>
+
+        // Update entities with generated ID
+        <span class="cov8" title="1">transaction.ID = model.ID
+        return nil</span>
+}
+
+// GetByTransactionID retrieves a transaction by transaction ID
+func (r *transactionRepository) GetByTransactionID(ctx context.Context, transactionID string) (*entities.Transaction, error) <span class="cov8" title="1">{
+        var model TransactionModel
+
+        if err := r.db.WithContext(ctx).Where("transaction_id = ?", transactionID).First(&amp;model).Error; err != nil </span><span class="cov8" title="1">{
+                if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        return nil, nil
+                }</span>
+                <span class="cov8" title="1">return nil, fmt.Errorf("failed to get transaction: %w", err)</span>
+        }
+
+        <span class="cov8" title="1">return r.modelToEntity(&amp;model), nil</span>
+}
+
+// Exists checks if a transaction exists by transaction ID
+func (r *transactionRepository) Exists(ctx context.Context, transactionID string) (bool, error) <span class="cov8" title="1">{
+        var count int64
+
+        if err := r.db.WithContext(ctx).Model(&amp;TransactionModel{}).Where("transaction_id = ?", transactionID).Count(&amp;count).Error; err != nil </span><span class="cov8" title="1">{
+                return false, fmt.Errorf("failed to check transaction existence: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return count &gt; 0, nil</span>
+}
+
+// entityToModel converts entities to database model
+func (r *transactionRepository) entityToModel(transaction *entities.Transaction) *TransactionModel <span class="cov8" title="1">{
+        model := &amp;TransactionModel{
+                ID:                       transaction.ID,
+                UserID:                   transaction.UserID,
+                AccountID:                transaction.AccountID,
+                TransactionID:            transaction.TransactionID,
+                TransactionType:          string(transaction.TransactionType),
+                TransactionStatus:        string(transaction.TransactionStatus),
+                Amount:                   transaction.Amount,
+                BalanceBefore:            transaction.BalanceBefore,
+                BalanceAfter:             transaction.BalanceAfter,
+                Currency:                 transaction.Currency,
+                Description:              transaction.Description,
+                ExternalReference:        transaction.ExternalReference,
+                Metadata:                 transaction.Metadata,
+                IsAccessibleFromExternal: transaction.IsAccessibleFromExternal,
+                CreatedAt:                transaction.CreatedAt,
+                UpdatedAt:                transaction.UpdatedAt,
+        }
+
+        if transaction.PaymentMethod != nil </span><span class="cov8" title="1">{
+                paymentMethod := string(*transaction.PaymentMethod)
+                model.PaymentMethod = &amp;paymentMethod
+        }</span>
+
+        <span class="cov8" title="1">return model</span>
+}
+
+// modelToEntity converts database model to entities
+func (r *transactionRepository) modelToEntity(model *TransactionModel) *entities.Transaction <span class="cov8" title="1">{
+        transaction := &amp;entities.Transaction{
+                ID:                       model.ID,
+                UserID:                   model.UserID,
+                AccountID:                model.AccountID,
+                TransactionID:            model.TransactionID,
+                TransactionType:          entities.TransactionType(model.TransactionType),
+                TransactionStatus:        entities.TransactionStatus(model.TransactionStatus),
+                Amount:                   model.Amount,
+                BalanceBefore:            model.BalanceBefore,
+                BalanceAfter:             model.BalanceAfter,
+                Currency:                 model.Currency,
+                Description:              model.Description,
+                ExternalReference:        model.ExternalReference,
+                Metadata:                 model.Metadata,
+                IsAccessibleFromExternal: model.IsAccessibleFromExternal,
+                CreatedAt:                model.CreatedAt,
+                UpdatedAt:                model.UpdatedAt,
+        }
+
+        if model.PaymentMethod != nil </span><span class="cov8" title="1">{
+                paymentMethod := entities.PaymentMethod(*model.PaymentMethod)
+                transaction.PaymentMethod = &amp;paymentMethod
+        }</span>
+
+        <span class="cov8" title="1">return transaction</span>
+}
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package consumer
+
+import (
+        "context"
+        "errors"
+        "github.com/segmentio/kafka-go"
+        "time"
+        "transaction-consumer/internal/infrastructures/config"
+        "transaction-consumer/pkg/logger"
+)
+
+// Consumer represents Kafka consumer
+type Consumer struct {
+        reader *kafka.Reader
+        logger logger.Logger
+}
+
+// MessageHandler defines the function signature for message handling
+type MessageHandler func(ctx context.Context, message []byte) error
+
+// NewConsumer creates a new Kafka consumer
+func NewConsumer(cfg config.KafkaConfig, log logger.Logger) (*Consumer, error) <span class="cov0" title="0">{
+        reader := kafka.NewReader(kafka.ReaderConfig{
+                Brokers:        cfg.Brokers,
+                GroupID:        cfg.GroupID,
+                Topic:          cfg.Topic,
+                MaxBytes:       cfg.MaxBytes,
+                CommitInterval: cfg.CommitInterval,
+                StartOffset:    kafka.LastOffset,
+                ErrorLogger:    kafka.LoggerFunc(log.Error),
+        })
+
+        return &amp;Consumer{
+                reader: reader,
+                logger: log,
+        }, nil
+}</span>
+
+// Consume starts consuming messages
+func (c *Consumer) Consume(ctx context.Context, handler MessageHandler) error <span class="cov0" title="0">{
+        c.logger.Info("Starting Kafka consumer", "topic", c.reader.Config().Topic)
+
+        for </span><span class="cov0" title="0">{
+                select </span>{
+                case &lt;-ctx.Done():<span class="cov0" title="0">
+                        c.logger.Info("Consumer context cancelled, stopping...")
+                        return ctx.Err()</span>
+                default:<span class="cov0" title="0">
+                        message, err := c.reader.FetchMessage(ctx)
+                        if err != nil </span><span class="cov0" title="0">{
+                                if errors.Is(err, context.Canceled) </span><span class="cov0" title="0">{
+                                        return nil
+                                }</span>
+                                <span class="cov0" title="0">c.logger.Error("Failed to fetch message", "error", err)
+                                time.Sleep(time.Second) // Backoff
+                                continue</span>
+                        }
+
+                        // Process message
+                        <span class="cov0" title="0">if err := handler(ctx, message.Value); err != nil </span><span class="cov0" title="0">{
+                                c.logger.Error("Failed to process message", "error", err)
+                                // Continue processing other messages
+                        }</span>
+
+                        // Commit message
+                        <span class="cov0" title="0">if err := c.reader.CommitMessages(ctx, message); err != nil </span><span class="cov0" title="0">{
+                                c.logger.Error("Failed to commit message", "error", err)
+                        }</span>
+                }
+        }
+}
+
+// Close closes the consumer
+func (c *Consumer) Close() error <span class="cov0" title="0">{
+        return c.reader.Close()
+}</span>
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package usecases
+
+import (
+        "context"
+        "fmt"
+        "transaction-consumer/internal/domain/entities"
+        "transaction-consumer/internal/domain/repositories"
+        "transaction-consumer/pkg/logger"
+)
+
+type TransactionUseCase interface {
+        ProcessTransaction(ctx context.Context, transaction *entities.Transaction) error
+}
+
+type transactionUseCase struct {
+        transactionRepo repositories.TransactionRepository
+        logger          logger.Logger
+}
+
+func NewTransactionUseCase(repo repositories.TransactionRepository, log logger.Logger) TransactionUseCase <span class="cov8" title="1">{
+        return &amp;transactionUseCase{
+                transactionRepo: repo,
+                logger:          log,
+        }
+}</span>
+
+func (uc *transactionUseCase) ProcessTransaction(ctx context.Context, transaction *entities.Transaction) error <span class="cov8" title="1">{
+        // Validate transaction
+        if !transaction.IsValid() </span><span class="cov8" title="1">{
+                return fmt.Errorf("invalid transaction data")
+        }</span>
+
+        <span class="cov8" title="1">exists, err := uc.transactionRepo.Exists(ctx, transaction.TransactionID)
+        if err != nil </span><span class="cov8" title="1">{
+                uc.logger.Error("Failed to check transaction existence", "error", err, "transactionID", transaction.TransactionID)
+                return fmt.Errorf("failed to check transaction existence: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">if exists </span><span class="cov8" title="1">{
+                uc.logger.Info("Transaction already exists, skipping", "transactionID", transaction.TransactionID)
+                return nil
+        }</span>
+
+        <span class="cov8" title="1">if transaction.TransactionStatus == entities.TransactionStatusFailed </span><span class="cov8" title="1">{
+                if transaction.BalanceBefore != transaction.BalanceAfter </span><span class="cov8" title="1">{
+                        uc.logger.Warn("Failed transaction has balance change", "transactionID", transaction.TransactionID)
+                }</span>
+        }
+
+        <span class="cov8" title="1">if err := uc.transactionRepo.Create(ctx, transaction); err != nil </span><span class="cov8" title="1">{
+                uc.logger.Error("Failed to create transaction", "error", err, "transactionID", transaction.TransactionID)
+                return fmt.Errorf("failed to create transaction: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">uc.logger.Info("Transaction processed successfully",
+                "transactionID", transaction.TransactionID,
+                "type", transaction.TransactionType,
+                "status", transaction.TransactionStatus,
+                "amount", transaction.Amount)
+
+        return nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file8" style="display: none">package logger
+
+import (
+        "log/slog"
+        "os"
+)
+
+type Logger interface {
+        Debug(msg string, args ...interface{})
+        Info(msg string, args ...interface{})
+        Warn(msg string, args ...interface{})
+        Error(msg string, args ...interface{})
+        Fatal(msg string, args ...interface{})
+}
+
+type logger struct {
+        slog *slog.Logger
+}
+
+func NewLogger() Logger <span class="cov8" title="1">{
+        return &amp;logger{
+                slog: slog.New(slog.NewJSONHandler(os.Stdout, &amp;slog.HandlerOptions{
+                        Level: slog.LevelDebug,
+                })),
+        }
+}</span>
+
+func (l *logger) Debug(msg string, args ...interface{}) <span class="cov8" title="1">{
+        l.slog.Debug(msg, args...)
+}</span>
+
+func (l *logger) Info(msg string, args ...interface{}) <span class="cov8" title="1">{
+        l.slog.Info(msg, args...)
+}</span>
+
+func (l *logger) Warn(msg string, args ...interface{}) <span class="cov8" title="1">{
+        l.slog.Warn(msg, args...)
+}</span>
+
+func (l *logger) Error(msg string, args ...interface{}) <span class="cov8" title="1">{
+        l.slog.Error(msg, args...)
+}</span>
+
+func (l *logger) Fatal(msg string, args ...interface{}) <span class="cov8" title="1">{
+        l.slog.Error(msg, args...)
+        os.Exit(1)
+}</span>
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
