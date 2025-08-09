@@ -17,18 +17,14 @@ COPY . .
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o transaction-consumer ./cmd/main.go
 
-# Final stage
-FROM alpine:latest
-
-RUN apk --no-cache add ca-certificates tzdata
-
-WORKDIR /app
+# Final stage - Using distroless for maximum security
+FROM gcr.io/distroless/static:nonroot
 
 # Copy the binary from builder stage
-COPY --from=builder /app/transaction-consumer .
+COPY --from=builder /app/transaction-consumer /transaction-consumer
 
-RUN chgrp -R 0 /app && \
-    chmod -R g=u /app
+# The distroless nonroot image already runs as non-root user (65532)
+USER nonroot:nonroot
 
 # Run the application
-CMD ["./transaction-consumer"]
+CMD ["/transaction-consumer"]
